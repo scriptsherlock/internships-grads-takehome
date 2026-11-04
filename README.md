@@ -1,110 +1,23 @@
-# Internship, placement and graduate take home assessment
+# render-schedule
 
-[job-ad]: https://incident.io/careers#open-roles
+`render-schedule` renders an on-call schedule from a rotation plus overrides. It is built around one question: **who is on call at time *t*?**
 
-## About us
+The brief is in [BRIEF.md](BRIEF.md).
 
-incident.io is the leading AI incident response platform, relied on by some of the best engineering teams in the world when things go wrong.
+## Requirements
 
-Since launching in 2021, we've helped over 2,000 companies, including OpenAI, Netflix, and Airbnb, run more than 1 million incidents.
+- **Python 3.11 or newer.** Check with `python3 --version`.
+- **No runtime dependencies.** It uses only the standard library.
+- **Tests only:** pytest and Hypothesis (see [Running the tests](#running-the-tests)).
 
-The stakes are real, the talent is insane, and somehow it's a genuinely lovely place to work. We all pull our weight, go the extra mile, and put in the bit of magic most companies don't have time for, all while having fun and never taking ourselves too seriously.
+## Usage
 
-We've raised $96 million from Index Ventures, Insight Partners, and Point Nine, and we're growing fast. There's never been a better time to join.
-
-## What is early careers at incident.io like?
-
-What you need to be successful:
-- Have a bias for action and ownership and like to get things shipped, learn from mistakes, and take responsibility for your work.
-- Stay curious and don’t just accept things as they are, enjoying asking “why?” and “what if?”
-- Collaborate in person and get energy from being around others, bouncing around ideas, asking questions, and giving and receiving feedback.
-- Love building whether it’s features, tools, or ideas, and enjoy creating things and seeing them make an impact.
-- Enjoy fast-paced environments and feel comfortable with change and the energy that comes with moving quickly.
-- Keep a low ego by staying humble and staying focused on the wider mission.
-
-> For more info, check out our [candidate hub](https://incident.io/careers/candidate-hub/early-careers) for a behind-the-scenes look at the life of interns and grads at incident.
-
-## Complete our take-home challenge
-
-### Intro
-
-Imagine you're working at incident.io and we're building a product that can page
-(call them, send an SMS, send a notification to a mobile app, etc) engineers
-when their services are involved in an incident.
-
-When configuring an on-call system, you don't want to say "whenever service X
-goes down, page Y person" as that person probably has a social life and won't
-appreciate receiving all the pages, all the time.
-
-Instead, you want to build schedules: a set of people who take it in turns to
-provide cover for a service by rotating through on-call shifts.
-
-In JSON form, the configuration that describes how a schedule behaves might look
-like this:
-
-```js
-// This is a schedule.
-{
-  "users": [
-    "alice",
-    "bob",
-    "charlie"
-  ],
-
-  // 5pm, Friday 6th November 2026
-  "handover_start_at": "2026-11-06T17:00:00Z",
-  "handover_interval_days": 7
-}
-```
-
-In that example, our schedule will rotate evenly between those users with the first shift starting at 5pm, 
-Friday 6th November 2026, with shift changes happening every 7 days.
-
-That means:
-
-- Alice takes the shift for 1 week, starting at 5pm, Friday 6th November 2026
-- Then Bob is on-call for 1 week from 5pm, Friday 13th November 2026
-- Then Charlie, then...
-- Back to Alice again.
-
-Visually, this might look like this:
-
-![Schedule](./schedule2026.png)
-
-Schedule systems often support 'overrides' where you can add temporary shift
-modifications to a schedule, such as if someone wants to go walk their dog or go
-to the cinema.
-
-An override specifies the person that will take the shift and the time period it covers.
-An example of Charlie covering 5pm–10pm on Monday 9th November 2026 would look like this:
-
-```js
-// This is an override.
-{
-  // Charlie will cover this shift
-  "user": "charlie",
-  // 5pm, Monday 9th November 2026
-  "start_at": "2026-11-09T17:00:00Z",
-  // 10pm, Monday 9th November 2026
-  "end_at": "2026-11-09T22:00:00Z"
-}
-```
-
-You can assume that overrides will always be after the schedule's `handover_start_at`, and won't 
-overlap with each other.
-
-### Task
-
-We would like you to build – in any language you choose, but ideally one you are
-very comfortable in – a script called `./render-schedule` that implements a
-scheduling algorithm.
-
-It should be run like so:
+### Range mode (the brief)
 
 ```console
 $ ./render-schedule \
-    --schedule=schedule.json \
-    --overrides=overrides.json \
+    --schedule=examples/schedule.json \
+    --overrides=examples/overrides.json \
     --from='2026-11-06T17:00:00Z' \
     --until='2026-11-20T17:00:00Z'
 [
@@ -131,47 +44,146 @@ $ ./render-schedule \
 ]
 ```
 
-Where:
+### Point mode: "who do I page right now?"
 
-- `--schedule` JSON file containing a definition of a schedule (see above example)
-- `--overrides` JSON file containing an array of overrides (see above example)
-- `--from` the time from which to start listing entries
-- `--until` the time until which to list entries
+```console
+$ ./render-schedule \
+    --schedule=examples/schedule.json \
+    --overrides=examples/overrides.json \
+    --at='2026-11-09T18:00:00Z'
+{
+  "at": "2026-11-09T18:00:00Z",
+  "user": "charlie",
+  "source": "override",
+  "next": {
+    "user": "alice",
+    "source": "rotation",
+    "start_at": "2026-11-09T22:00:00Z"
+  }
+}
+```
 
-The script should output a JSON array of final schedule as a list of entries.
-This should take into account the projected entries (based on the handover
-information in the schedule) alongside the provided overrides.
+- **`user` and `source`:** who is on call, and whether that comes from an override or the normal rotation.
+- **`next`:** the next time a *different* person takes over.
+  - `null` if that never happens, for example in a one-person rotation.
+  - Before the schedule starts, `user` is `null` and `next` is the first person on call.
 
-Your schedule should also be truncated based on the from and until parameters provided. 
-For example, if an entry was from 1pm November 7 → 1pm November 9, 
-but from was 2pm November 8, the entry should be returned as 2pm November 8 → 1pm November 9 
-(ignoring the part of the entry that is outside the provided range).
+### Flags and exit codes
 
-Entries should be truncated to match the from/until parameters.
+- `--overrides` is optional.
+- `--at` cannot be combined with `--from`/`--until`.
+- Run `./render-schedule --help` for the full list.
 
-We care more about correctness than performance: we will only run your code for
-time windows up to a few weeks, and with under 100 overrides.
+If the script isn't executable (some ZIP tools drop the permission), run `python3 render-schedule ...` instead.
 
-### Code submission and video explanation
+| Exit code | Meaning |
+|---|---|
+| `0` | Success. The JSON is printed to stdout. |
+| `1` | Invalid input: a missing or non-UTF-8 file, bad JSON, a bad timestamp, overlapping overrides, `--from` not before `--until`, or dates beyond the year 9999. An `error: ...` message is printed to stderr. |
+| `2` | Missing, unknown or conflicting flags. The usage message is printed. |
 
-We'd like you to submit two things:
-1. Your code
-2. A 5-minute video walkthrough
+## Running the tests
 
-Please submit a ZIP file containing the code and a `README.md` that includes 
-instructions on running your code, including installation of dependencies.
+```console
+$ python3 -m venv .venv
+$ source .venv/bin/activate          # Windows: .venv\Scripts\activate
+$ pip install -r requirements-dev.txt
+$ pytest
+```
 
-In the 'notes' field, include a link to a 5-minute video explaining:
-- How you approached solving the problem, and why you chose that approach
-- How your code implements that solution
-- Now you've built the scheduler, what other product features might you build
-  on top of this
+| File | What it covers |
+|---|---|
+| `tests/test_core.py` | Each core function on its own, the brief's example as a golden test, and the edge cases |
+| `tests/test_parsing.py` | Timestamp handling and every validation error |
+| `tests/test_cli.py` | Runs the real executable. Checks the brief's output matches byte for byte, plus `--at`, exit codes and error messages. |
+| `tests/test_properties.py` | Hypothesis generates hundreds of random schedules. The output is compared hour by hour against a deliberately naive "oracle" that shares no code with the solution. |
 
-Imagine you're showing this code to a new team-mate: your video should get
-them up-to-speed on the codebase.
+## How it works
 
-(We recommend [Loom](https://www.loom.com) for recording this, but you're welcome 
-to use any other tool you're comfortable with).
+All the logic is in [`scheduler/core.py`](scheduler/core.py). Every function in it is pure (no I/O).
 
-_You may use AI tools, but you remain responsible for the code you submit. 
-You should understand what it does and be able to explain and justify the decisions behind it._
+```
+on_call_at(t)                 ← the single source of truth
+   ├── render(from, until)    = change points → on_call_at(start of each gap) → merge
+   └── next_handover(t)       = first later change point where the person differs
+```
+
+1. **`on_call_at(t)`** returns the override covering `t` if there is one. Otherwise it uses the rotation: `users[((t - start) // interval) % len(users)]`.
+2. **`render`**:
+   - The on-call person can only change at a handover or where an override starts or ends.
+   - It collects those "change points" inside `[from, until)` and asks `on_call_at` once per gap between them.
+   - It joins back-to-back entries for the same person.
+   - The tricky cases need no special code: an override that crosses a handover, a window starting mid-shift, or an override poking out of the window. They are all just more change points. Truncation happens automatically, because no point outside the window is ever created.
+3. **`next_handover(t)`** walks forward through the change points after `t` until the person changes. It produces them lazily, using `heapq.merge`, so it stops at the first change without building the rest.
+   - Once every override is over, the rotation repeats every `len(users) × interval`.
+   - So if nobody new appears within one full cycle after that, nobody ever will. That keeps the search finite.
+
+All time ranges are **half-open, `[start, end)`**. At a handover the incoming person is on call, so back-to-back entries never overlap.
+
+### Design decisions
+
+| Situation | Decision | Reason |
+|---|---|---|
+| Overlapping overrides | Rejected (exit 1) | Otherwise who is on call would depend on the order of the file. |
+| `handover_interval_days` | Positive whole number only | A fractional interval would shift the handover time of day from one shift to the next. |
+| Same-person neighbours | Merged, including across handovers | Someone on call without a break is shown as one stretch. |
+| Before `handover_start_at` | Nobody is on call | That span is omitted from range output, and `--at` reports `user: null`. |
+| Timestamps | Any timezone offset is accepted. Everything is computed and printed in UTC (`...Z`). | Matches the brief exactly and avoids daylight-saving bugs. |
+| Fractional seconds | Rejected | Output is in whole seconds, so accepting fractions would print entries that look zero-length or overlapping. |
+
+### Cost
+
+`render` costs roughly O(change points × overrides). For the brief's sizes (a few weeks, fewer than 100 overrides) that is negligible. Overrides are stored sorted, so a binary search would make each lookup O(log n) if it were ever needed.
+
+## Project layout
+
+```
+render-schedule        executable entry point (Python version check → scheduler.cli.main)
+scheduler/
+  models.py            Schedule, Override, Entry, OnCall, Handover dataclasses
+  parsing.py           JSON + timestamp parsing, validation, output formatting
+  core.py              the scheduling logic (pure functions)
+  cli.py               flags, the two modes, error messages, exit codes
+tests/                 unit, edge-case, end-to-end and property-based tests
+examples/              the brief's schedule and override
+docs/mockups/          concept designs for future features (not implemented)
+```
+
+Dependencies run one way: `cli → core / parsing → models`. The core never touches files or JSON, so it could sit behind an HTTP API or a paging service unchanged.
+
+## What I'd build next
+
+The features I'd build next all extend the same core function, `on_call_at(t)`.
+
+- **Paging integration.** When an alert fires, call `on_call_at(now)` and notify that person directly.
+- **Handover reminders.** `next_handover` already knows who takes over and when, so it can send messages like "you're on call in an hour".
+- **Escalation.** If a page isn't acknowledged within a few minutes, page a backup. That could be the next person in the rotation or a separate escalation list.
+- **Fairness report.** Add up each person's hours from the rendered schedule. That shows whether on-call load is shared evenly, and how much of it comes from covering overrides.
+- **Timezone-aware handovers.** Store the handover as a local time plus a timezone, for example "17:00 Europe/London", instead of fixed UTC days. That fixes the current limitation where handovers drift by an hour when the clocks change.
+
+None of these are built yet. Together they would turn the scheduler into something closer to a full on-call product, like the dashboard I show in the video.
+
+### Mock-ups
+
+These are concept designs only. Nothing in them is implemented.
+
+**On-call dashboard.** This view brings the features together:
+- "Who's on call now" comes from `on_call_at(now)`.
+- "Up next", with its countdown, comes from `next_handover`.
+- The escalation contacts are listed alongside.
+- An on-call hours chart works as the fairness report.
+- A banner shows a timezone-aware handover.
+
+![On-call dashboard mock-up](docs/mockups/dashboard.png)
+
+**Paging.** The on-call person is told they're on call, and why. Here Charlie is covering Alice through an override.
+
+![Slack paging mock-up](docs/mockups/slack-paging.png)
+
+**Handover reminder.** An hour before Alice's shift, she gets a heads-up built from `next_handover`.
+
+![Slack handover reminder mock-up](docs/mockups/slack-reminder.png)
+
+**Escalation.** If a page isn't acknowledged, or the on-call person needs help, it goes to a backup. Here Charlie escalates the page to Bob.
+
+![Slack escalation mock-up](docs/mockups/slack-escalation.png)

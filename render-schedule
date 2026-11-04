@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""Entry point: ./render-schedule --schedule=... --overrides=... --from=... --until=..."""
+
+import os
+import sys
+
+# Checked before importing the package so older Pythons get a clear message
+# (parsing '...Z' timestamps with datetime.fromisoformat needs 3.11+).
+if sys.version_info < (3, 11):
+    sys.exit("render-schedule requires Python 3.11 or newer")
+
+# Make the `scheduler` package importable however the script is invoked
+# (from another directory, via a symlink, or as `python3 render-schedule`).
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+
+from scheduler.cli import main  # noqa: E402  (must come after the checks above)
+
+sys.exit(main())
