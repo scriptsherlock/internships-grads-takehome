@@ -1,0 +1,4 @@
+# Keep LF endings so the `#!/usr/bin/env python3` shebang works on macOS/Linux
+# even when the repo is checked out on Windows.
+* text=auto eol=lf
+*.png binary
